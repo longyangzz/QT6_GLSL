@@ -199,9 +199,6 @@ void PointCloudWidget::setRenderMode(int mode)
 void PointCloudWidget::initializeGL()
 {
     initializeOpenGLFunctions();
-    // 初始化坐标轴
-    initAxis();
-
     glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_PROGRAM_POINT_SIZE);
@@ -237,6 +234,11 @@ void PointCloudWidget::initializeGL()
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+
+    // 初始化坐标轴
+    initAxis();
+
+    initBoundingBoxGeometry();
 }
 
 void PointCloudWidget::resizeGL(int w, int h)
@@ -254,9 +256,9 @@ void PointCloudWidget::paintGL()
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glEnable(GL_DEPTH_TEST);   // 必须开启深度测试
-    glDisable(GL_BLEND);       // 避免混合干扰
-    glDisable(GL_CULL_FACE);   // 坐标轴无背面
+    //glEnable(GL_DEPTH_TEST);   // 必须开启深度测试
+    //glDisable(GL_BLEND);       // 避免混合干扰
+    //glDisable(GL_CULL_FACE);   // 坐标轴无背面
     if (m_points.empty()) return;
 
     m_program.bind();
@@ -277,23 +279,11 @@ void PointCloudWidget::paintGL()
     renderAxis();
     glDepthMask(GL_TRUE);  // 恢复
 
+    // 渲染边界盒（在点云之后，确保线框可见）
+    renderBoundingBox();
     
 }
 
-QColor elevationColor(float z, float minZ, float maxZ)
-{
-    // 将z值归一化到[0, 1]区间
-    float t = (z - minZ) / (maxZ - minZ);
-
-    // 如果超出范围，直接返回边界颜色
-    if (t < 0.0f) return Qt::blue;
-    if (t > 1.0f) return Qt::red;
-
-    // 使用线性插值在蓝色和红色之间过渡
-    int red = static_cast<int>(255 * t);       // 红色分量随t增加
-    int blue = 255 - red;                      // 蓝色分量随t减少
-    return QColor(red, 0, blue);               // 返回RGB颜色
-}
 
 void PointCloudWidget::renderAxis()
 {
@@ -389,6 +379,93 @@ void PointCloudWidget::initAxis()
 
     m_axisInitialized = true;
 }
+
+void PointCloudWidget::initBoundingBoxGeometry()
+{
+    if (m_boxInitialized) return;
+
+    // --- 1. 创建着色器（不依赖任何数据）---
+    m_boxShader = new QOpenGLShaderProgram(this);
+    m_boxShader->addShaderFromSourceCode(QOpenGLShader::Vertex,
+        "#version 330 core\n"
+        "layout (location = 0) in vec3 aPos;\n"
+        "uniform mat4 uMVP;\n"
+        "void main() {\n"
+        "   gl_Position = uMVP * vec4(aPos, 1.0);\n"
+        "}"
+    );
+    m_boxShader->addShaderFromSourceCode(QOpenGLShader::Fragment,
+        "#version 330 core\n"
+        "out vec4 FragColor;\n"
+        "uniform vec3 uColor;\n"
+        "void main() {\n"
+        "   FragColor = vec4(uColor, 1.0);\n"
+        "}"
+    );
+
+    if (!m_boxShader->link()) {
+        qWarning() << "Box shader link failed:" << m_boxShader->log();
+        return;
+    }
+
+    // --- 2. 创建单位立方体 VBO（固定几何）---
+    std::vector<QVector3D> unitCube = {
+        {0,0,0}, {1,0,0}, {1,1,0}, {0,1,0},
+        {0,0,1}, {1,0,1}, {1,1,1}, {0,1,1}
+    };
+    std::vector<GLuint> indices = {
+        0,1, 1,2, 2,3, 3,0,
+        4,5, 5,6, 6,7, 7,4,
+        0,4, 1,5, 2,6, 3,7
+    };
+
+    m_boxVbo.create();
+    m_boxVbo.bind();
+    m_boxVbo.allocate(unitCube.data(), static_cast<int>(unitCube.size() * sizeof(QVector3D)));
+    m_boxVbo.release();
+
+    m_boxEbo.create();
+    m_boxEbo.bind();
+    m_boxEbo.allocate(indices.data(), static_cast<int>(indices.size() * sizeof(GLuint)));
+    m_boxEbo.release();
+
+    m_boxInitialized = true;
+}
+
+
+void PointCloudWidget::renderBoundingBox()
+{
+    if (!m_boxInitialized || m_points.empty()) return;
+
+    // 动态构建模型矩阵：将 [0,1]^3 映射到 [min, max]
+    QMatrix4x4 model;
+    model.translate(m_bboxMin);                    // 移动到最小角
+    model.scale(m_bboxMax - m_bboxMin);            // 缩放到实际尺寸
+
+    QMatrix4x4 mvp = m_projection * m_view * model;
+
+    // 渲染
+    m_boxShader->bind();
+    m_boxShader->setUniformValue("uMVP", mvp);
+    m_boxShader->setUniformValue("uColor", QVector3D(1.0f, 1.0f, 0.0f)); // 黄色
+
+    m_boxVbo.bind();
+    m_boxEbo.bind();
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+    //glDepthMask(GL_FALSE); // 避免被点云遮挡
+    glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, nullptr);
+    //glDepthMask(GL_TRUE);
+
+    glDisableVertexAttribArray(0);
+    m_boxVbo.release();
+    m_boxEbo.release();
+    m_boxShader->release();
+}
+
+
 
 
 void PointCloudWidget::mousePressEvent(QMouseEvent* event)

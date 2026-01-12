@@ -70,6 +70,15 @@ private:
 
     void initAxis();
     void renderAxis();
+
+    // 边界盒相关
+    QOpenGLShaderProgram* m_boxShader = nullptr;
+    QOpenGLBuffer m_boxVbo;   // 顶点缓冲
+    QOpenGLBuffer m_boxEbo;   // 索引缓冲
+    bool m_boxInitialized = false;
+
+    void initBoundingBoxGeometry();
+    void renderBoundingBox();
 };
 
 #endif // POINTCLOUDWIDGET_H
