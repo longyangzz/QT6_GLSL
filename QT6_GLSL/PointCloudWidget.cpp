@@ -4,6 +4,9 @@
 
 PointCloudWidget::PointCloudWidget(QWidget* parent)
     : QOpenGLWidget(parent)
+    , m_renderMode(0)
+    , m_distance(1.0f)
+    , m_sceneRadius(0.0f)
 {
     setFocusPolicy(Qt::StrongFocus);
 }
