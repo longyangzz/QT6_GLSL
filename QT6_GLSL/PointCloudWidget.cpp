@@ -456,19 +456,35 @@ void PointCloudWidget::initScreenAxisOrtho()
     // 轴线
     vertices.push_back({ 0, 0, 0, 0, 0, 1 });
     vertices.push_back({ 0, 0, L, 0, 0, 1 });
-    
+    // 字母 "Z"（在 Z=L 平面）
+    vertices.push_back({ -W,  W, L, 0, 0, 1 });
+    vertices.push_back({ W,  W, L, 0, 0, 1 });
+    vertices.push_back({ W,  W, L, 0, 0, 1 });
+    vertices.push_back({ -W, -W, L, 0, 0, 1 });
+    vertices.push_back({ -W, -W, L, 0, 0, 1 });
+    vertices.push_back({ W, -W, L, 0, 0, 1 });
 
     // ---- X 轴（红色）----
     // 轴线
     vertices.push_back({ 0, 0, 0, 1, 0, 0 });
     vertices.push_back({ L, 0, 0, 1, 0, 0 });
-    
+    // 字母 "X"
+    vertices.push_back({ L + W,  W, 0, 1, 0, 0 });
+    vertices.push_back({ L - W, -W, 0, 1, 0, 0 });
+    vertices.push_back({ L + W, -W, 0, 1, 0, 0 });
+    vertices.push_back({ L - W,  W, 0, 1, 0, 0 });
 
     // ---- Y 轴（绿色）----
     // 轴线
     vertices.push_back({ 0, 0, 0, 0, 1, 0 });
     vertices.push_back({ 0, L, 0, 0, 1, 0 });
-    
+    // 字母 "Y"
+    vertices.push_back({ 0, L + W, 0, 0, 1, 0 });
+    vertices.push_back({ 0, L + W + 5, 0, 0, 1, 0 });
+    vertices.push_back({ 0, L + W + 5, 0, 0, 1, 0 });
+    vertices.push_back({ -W, L + W + 10, 0, 0, 1, 0 });
+    vertices.push_back({ 0, L + W + 5, 0, 0, 1, 0 });
+    vertices.push_back({ W, L + W + 10, 0, 0, 1, 0 });
 
     // 3. 创建VBO
     m_axisVbo.create();
@@ -532,7 +548,7 @@ void PointCloudWidget::renderScreenAxisOrtho()
         sizeof(float) * 6,
         reinterpret_cast<void*>(sizeof(float) * 3));
 
-    glDrawArrays(GL_LINES, 0, 6);
+    glDrawArrays(GL_LINES, 0, 24);
 
     // 清理
     glDisableVertexAttribArray(0);
