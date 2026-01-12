@@ -122,6 +122,7 @@ void PointCloudWidget::loadPointCloud(const QString& filename)
     update();
 
     m_showColorBar = (m_renderMode == 0); // 高程色模式才显示
+    updateBoundingBoxGeometry();
 }
 
 void PointCloudWidget::paintEvent(QPaintEvent* event)
@@ -274,13 +275,15 @@ void PointCloudWidget::paintGL()
 
     m_program.release();
 
-    // 渲染坐标轴（放在最后，确保在前面）
-    glDepthMask(GL_FALSE); // 不写深度缓冲
+    // 2. 渲染坐标轴（半透明，无深度写入）
+    glDepthMask(GL_FALSE);
     renderAxis();
-    glDepthMask(GL_TRUE);  // 恢复
+    glDepthMask(GL_TRUE);
 
-    // 渲染边界盒（在点云之后，确保线框可见）
+    // 3. 渲染边界盒（最后渲染，确保在最前面）
+    //renderBoundingBoxSimple();
     renderBoundingBox();
+    
     
 }
 
@@ -380,11 +383,74 @@ void PointCloudWidget::initAxis()
     m_axisInitialized = true;
 }
 
+void PointCloudWidget::updateBoundingBoxGeometry()
+{
+    if (m_points.empty()) return;
+
+    // 使用世界坐标系的实际顶点创建边界盒
+    float minX = m_bboxMin.x();
+    float minY = m_bboxMin.y();
+    float minZ = m_bboxMin.z();
+    float maxX = m_bboxMax.x();
+    float maxY = m_bboxMax.y();
+    float maxZ = m_bboxMax.z();
+
+    // 边界盒的8个顶点（世界坐标）
+    m_boxVertices = {
+        // 底面4个顶点
+        minX, minY, minZ,  // 0: 左前下
+        maxX, minY, minZ,  // 1: 右前下
+        maxX, maxY, minZ,  // 2: 右后下
+        minX, maxY, minZ,  // 3: 左后下
+
+        // 顶面4个顶点
+        minX, minY, maxZ,  // 4: 左前上
+        maxX, minY, maxZ,  // 5: 右前上
+        maxX, maxY, maxZ,  // 6: 右后上
+        minX, maxY, maxZ   // 7: 左后上
+    };
+
+    // 12条边的索引（24个索引）
+    m_boxIndices = {
+        // 底面矩形
+        0, 1,  // 底面前边
+        1, 2,  // 底面右边
+        2, 3,  // 底面后边
+        3, 0,  // 底面左边
+
+        // 顶面矩形
+        4, 5,  // 顶面前边
+        5, 6,  // 顶面右边
+        6, 7,  // 顶面后边
+        7, 4,  // 顶面左边
+
+        // 垂直边
+        0, 4,  // 左前垂直边
+        1, 5,  // 右前垂直边
+        2, 6,  // 右后垂直边
+        3, 7   // 左后垂直边
+    };
+
+    // 如果VBO已经创建，更新数据
+    if (m_boxInitialized) {
+        makeCurrent();
+
+        // 更新顶点数据
+        m_boxVbo.bind();
+        m_boxVbo.allocate(m_boxVertices.data(),
+            static_cast<int>(m_boxVertices.size() * sizeof(float)));
+        m_boxVbo.release();
+
+        // 如果有EBO，更新索引数据
+        doneCurrent();
+    }
+}
+
 void PointCloudWidget::initBoundingBoxGeometry()
 {
     if (m_boxInitialized) return;
 
-    // --- 1. 创建着色器（不依赖任何数据）---
+    // 1. 创建着色器
     m_boxShader = new QOpenGLShaderProgram(this);
     m_boxShader->addShaderFromSourceCode(QOpenGLShader::Vertex,
         "#version 330 core\n"
@@ -398,8 +464,9 @@ void PointCloudWidget::initBoundingBoxGeometry()
         "#version 330 core\n"
         "out vec4 FragColor;\n"
         "uniform vec3 uColor;\n"
+        "uniform float uAlpha;\n"
         "void main() {\n"
-        "   FragColor = vec4(uColor, 1.0);\n"
+        "   FragColor = vec4(uColor, uAlpha);\n"
         "}"
     );
 
@@ -408,61 +475,142 @@ void PointCloudWidget::initBoundingBoxGeometry()
         return;
     }
 
-    // --- 2. 创建单位立方体 VBO（固定几何）---
-    std::vector<QVector3D> unitCube = {
-        {0,0,0}, {1,0,0}, {1,1,0}, {0,1,0},
-        {0,0,1}, {1,0,1}, {1,1,1}, {0,1,1}
-    };
-    std::vector<GLuint> indices = {
-        0,1, 1,2, 2,3, 3,0,
-        4,5, 5,6, 6,7, 7,4,
-        0,4, 1,5, 2,6, 3,7
-    };
-
+    // 2. 初始化为空数据，稍后由 updateBoundingBoxGeometry 填充
     m_boxVbo.create();
-    m_boxVbo.bind();
-    m_boxVbo.allocate(unitCube.data(), static_cast<int>(unitCube.size() * sizeof(QVector3D)));
-    m_boxVbo.release();
-
-    m_boxEbo.create();
-    m_boxEbo.bind();
-    m_boxEbo.allocate(indices.data(), static_cast<int>(indices.size() * sizeof(GLuint)));
-    m_boxEbo.release();
+    m_boxVbo.setUsagePattern(QOpenGLBuffer::DynamicDraw);
 
     m_boxInitialized = true;
 }
 
-
-void PointCloudWidget::renderBoundingBox()
+// 另一种更简单的实现方式
+void PointCloudWidget::renderBoundingBoxSimple()
 {
-    if (!m_boxInitialized || m_points.empty()) return;
+    if (m_boxVertices.empty() || m_points.empty()) return;
 
-    // 动态构建模型矩阵：将 [0,1]^3 映射到 [min, max]
-    QMatrix4x4 model;
-    model.translate(m_bboxMin);                    // 移动到最小角
-    model.scale(m_bboxMax - m_bboxMin);            // 缩放到实际尺寸
+    // 创建临时着色器
+    static bool shaderInitialized = false;
+    static QOpenGLShaderProgram simpleShader;
 
-    QMatrix4x4 mvp = m_projection * m_view * model;
+    if (!shaderInitialized) {
+        simpleShader.addShaderFromSourceCode(QOpenGLShader::Vertex,
+            "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "uniform mat4 uMVP;\n"
+            "void main() {\n"
+            "   gl_Position = uMVP * vec4(aPos, 1.0);\n"
+            "}"
+        );
+        simpleShader.addShaderFromSourceCode(QOpenGLShader::Fragment,
+            "#version 330 core\n"
+            "out vec4 FragColor;\n"
+            "void main() {\n"
+            "   FragColor = vec4(1.0, 0.8, 0.2, 0.8);\n" // 金色，半透明
+            "}"
+        );
+        simpleShader.link();
+        shaderInitialized = true;
+    }
 
-    // 渲染
-    m_boxShader->bind();
-    m_boxShader->setUniformValue("uMVP", mvp);
-    m_boxShader->setUniformValue("uColor", QVector3D(1.0f, 1.0f, 0.0f)); // 黄色
+    // 启用混合和线条抗锯齿
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    glLineWidth(2.0f);
+    glDepthMask(GL_FALSE);
 
-    m_boxVbo.bind();
-    m_boxEbo.bind();
+    // 绑定着色器和数据
+    simpleShader.bind();
+    QMatrix4x4 mvp = m_projection * m_view;
+    simpleShader.setUniformValue("uMVP", mvp);
+
+    // 使用临时VBO
+    GLuint vbo;
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER,
+        m_boxVertices.size() * sizeof(float),
+        m_boxVertices.data(),
+        GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
 
-    //glDepthMask(GL_FALSE); // 避免被点云遮挡
-    glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, nullptr);
-    //glDepthMask(GL_TRUE);
+    // 直接绘制12条边
+    GLuint edges[] = {
+        0,1, 1,2, 2,3, 3,0,  // 底面
+        4,5, 5,6, 6,7, 7,4,  // 顶面
+        0,4, 1,5, 2,6, 3,7   // 垂直边
+    };
 
+    for (int i = 0; i < 24; i += 2) {
+        glDrawArrays(GL_LINES, edges[i], 2);
+    }
+
+    // 清理
+    glDisableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glDeleteBuffers(1, &vbo);
+    simpleShader.release();
+
+    // 恢复状态
+    glLineWidth(1.0f);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+}
+void PointCloudWidget::renderBoundingBox()
+{
+    if (!m_boxInitialized || m_boxVertices.empty() || m_points.empty()) {
+        qDebug() << "Cannot render bounding box: not initialized or empty";
+        return;
+    }
+
+    qDebug() << "Rendering bounding box with" << m_boxVertices.size() / 3 << "vertices";
+
+    // 保存当前状态
+    GLboolean depthMask;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+
+    // 禁用深度写入，确保边界盒始终可见
+    glDepthMask(GL_FALSE);
+
+    // 启用混合，使边界盒半透明
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // 设置线条渲染
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    glLineWidth(3.0f); // 更粗的线
+
+    m_boxShader->bind();
+
+    // 设置MVP矩阵
+    QMatrix4x4 mvp = m_projection * m_view;
+    m_boxShader->setUniformValue("uMVP", mvp);
+    m_boxShader->setUniformValue("uColor", QVector3D(1.0f, 0.5f, 0.0f)); // 橙色
+    m_boxShader->setUniformValue("uAlpha", 0.8f); // 80%不透明度
+
+    // 绑定顶点数据
+    m_boxVbo.bind();
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+
+    // 绘制所有边
+    glDrawElements(GL_LINES,
+        static_cast<GLsizei>(m_boxIndices.size()),
+        GL_UNSIGNED_INT,
+        m_boxIndices.data());
+
+    // 清理
     glDisableVertexAttribArray(0);
     m_boxVbo.release();
-    m_boxEbo.release();
     m_boxShader->release();
+
+    // 恢复渲染状态
+    glLineWidth(1.0f);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
 }
 
 

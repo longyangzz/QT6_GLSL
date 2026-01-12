@@ -72,13 +72,16 @@ private:
     void renderAxis();
 
     // 边界盒相关
-    QOpenGLShaderProgram* m_boxShader = nullptr;
-    QOpenGLBuffer m_boxVbo;   // 顶点缓冲
-    QOpenGLBuffer m_boxEbo;   // 索引缓冲
-    bool m_boxInitialized = false;
+    QOpenGLShaderProgram* m_boxShader;
+    QOpenGLBuffer m_boxVbo;
+    bool m_boxInitialized;
+    std::vector<float> m_boxVertices; // 存储边界盒顶点数据
+    std::vector<unsigned int> m_boxIndices; // 存储边界盒索引数据
 
     void initBoundingBoxGeometry();
     void renderBoundingBox();
+    void renderBoundingBoxSimple();
+    void updateBoundingBoxGeometry();
 };
 
 #endif // POINTCLOUDWIDGET_H
