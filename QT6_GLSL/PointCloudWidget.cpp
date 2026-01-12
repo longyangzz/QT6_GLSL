@@ -79,8 +79,8 @@ void PointCloudWidget::loadPointCloud(const QString& filename)
 
     // === 计算场景中心和半径 ===
     m_center = (m_bboxMin + m_bboxMax) * 0.5f;
-    QVector3D diagonal = m_bboxMax - m_bboxMin;
-    m_sceneRadius = 0.5f * diagonal.length();
+    m_bboxSize = m_bboxMax - m_bboxMin;
+    m_sceneRadius = 0.5f * m_bboxSize.length();
 
     // 避免除零
     if (m_sceneRadius < 1e-6f) m_sceneRadius = 1.0f;
@@ -199,6 +199,9 @@ void PointCloudWidget::setRenderMode(int mode)
 void PointCloudWidget::initializeGL()
 {
     initializeOpenGLFunctions();
+    // 初始化坐标轴
+    initAxis();
+
     glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_PROGRAM_POINT_SIZE);
@@ -248,7 +251,12 @@ void PointCloudWidget::resizeGL(int w, int h)
 
 void PointCloudWidget::paintGL()
 {
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glEnable(GL_DEPTH_TEST);   // 必须开启深度测试
+    glDisable(GL_BLEND);       // 避免混合干扰
+    glDisable(GL_CULL_FACE);   // 坐标轴无背面
     if (m_points.empty()) return;
 
     m_program.bind();
@@ -263,6 +271,12 @@ void PointCloudWidget::paintGL()
     glBindVertexArray(0);
 
     m_program.release();
+
+    // 渲染坐标轴（放在最后，确保在前面）
+    glDepthMask(GL_FALSE); // 不写深度缓冲
+    renderAxis();
+    glDepthMask(GL_TRUE);  // 恢复
+
     
 }
 
@@ -279,6 +293,101 @@ QColor elevationColor(float z, float minZ, float maxZ)
     int red = static_cast<int>(255 * t);       // 红色分量随t增加
     int blue = 255 - red;                      // 蓝色分量随t减少
     return QColor(red, 0, blue);               // 返回RGB颜色
+}
+
+void PointCloudWidget::renderAxis()
+{
+    if (!m_axisInitialized) return;
+
+    // 就放在包围盒的最小角（世界坐标固定）
+    QVector3D origin = m_center;
+
+    // 向内偏移一点避免遮挡
+    origin += 0.02f * m_bboxSize;
+
+    // 长度 = 包围盒最大边的 10%
+    float L = 0.1f * std::max({ m_bboxSize.x(), m_bboxSize.y(), m_bboxSize.z() });
+
+    QMatrix4x4 model;
+    model.translate(origin);
+    model.scale(L);
+
+    QMatrix4x4 mvp = m_projection * m_view * model;
+
+    // 使用着色器
+    m_axisShader->bind();
+    m_axisShader->setUniformValue("uMVP", mvp);
+
+    // 绑定 VBO
+    m_axisVbo.bind();
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, nullptr);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, reinterpret_cast<void*>(sizeof(float) * 3));
+
+    // 绘制 3 条线（6 个顶点）
+    glLineWidth(3.0f);
+    glDrawArrays(GL_LINES, 0, 6);
+
+    // 解绑
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    m_axisVbo.release();
+    m_axisShader->release();
+}
+
+
+void PointCloudWidget::initAxis()
+{
+    if (m_axisInitialized) return;
+
+    // 1. 创建着色器
+    m_axisShader = new QOpenGLShaderProgram(this);
+    m_axisShader->addShaderFromSourceCode(QOpenGLShader::Vertex,
+        "#version 330 core\n"
+        "layout (location = 0) in vec3 aPos;\n"
+        "layout (location = 1) in vec3 aColor;\n"
+        "uniform mat4 uMVP;\n"
+        "out vec3 vColor;\n"
+        "void main() {\n"
+        "   gl_Position = uMVP * vec4(aPos, 1.0);\n"
+        "   vColor = aColor;\n"
+        "}"
+    );
+    m_axisShader->addShaderFromSourceCode(QOpenGLShader::Fragment,
+        "#version 330 core\n"
+        "in vec3 vColor;\n"
+        "out vec4 FragColor;\n"
+        "void main() {\n"
+        "   FragColor = vec4(vColor, 1.0);\n"
+        "}"
+    );
+    m_axisShader->link();
+
+    // 2. 准备顶点数据：每条线两个点 + RGB 颜色
+    struct Vertex {
+        float x, y, z;
+        float r, g, b;
+    };
+    std::vector<Vertex> vertices = {
+        // X 轴：红
+        {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f},
+        {1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f},
+        // Y 轴：绿
+        {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f},
+        // Z 轴：蓝
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f},
+        {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f}
+    };
+
+    // 3. 创建 VBO
+    m_axisVbo.create();
+    m_axisVbo.bind();
+    m_axisVbo.allocate(vertices.data(), static_cast<int>(vertices.size() * sizeof(Vertex)));
+    m_axisVbo.release();
+
+    m_axisInitialized = true;
 }
 
 
