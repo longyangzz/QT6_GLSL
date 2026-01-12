@@ -33,6 +33,7 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
 
+    void paintEvent(QPaintEvent* event) override;
 private:
     void updateCamera();
 
@@ -57,6 +58,8 @@ private:
     QVector3D m_bboxMax;   // 真实坐标系下的最大点
     QVector3D m_center;    // 包围盒中心
     float m_sceneRadius = 0.0f;   // 场景半径（用于设置相机距离）
+
+    bool m_showColorBar = false; // 是否显示颜色条
 };
 
 #endif // POINTCLOUDWIDGET_H

@@ -1,7 +1,8 @@
 ﻿#include "PointCloudWidget.h"
 #include <QDir>
 #include <QDebug>
-
+#include <QPainter>
+#include <QLinearGradient>
 PointCloudWidget::PointCloudWidget(QWidget* parent)
     : QOpenGLWidget(parent)
     , m_renderMode(0)
@@ -133,7 +134,57 @@ void PointCloudWidget::loadPointCloud(const QString& filename)
     resetView();
 
     update();
+
+    m_showColorBar = (m_renderMode == 0); // 高程色模式才显示
 }
+
+void PointCloudWidget::paintEvent(QPaintEvent* event)
+{
+    // 先调用 QOpenGLWidget 的 paintEvent（会触发 paintGL）
+    QOpenGLWidget::paintEvent(event);
+
+    // 如果不是高程色模式，不画颜色条
+    if (!m_showColorBar) return;
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+
+    // 颜色条位置：右侧，宽 20px，高 80% 窗口
+    int barWidth = 20;
+    int barHeight = static_cast<int>(height() * 0.8f);
+    int barX = width() - barWidth - 10;
+    int barY = (height() - barHeight) / 2;
+
+    // 创建垂直线性渐变（从 minZ 到 maxZ）
+    QLinearGradient gradient(barX, barY + barHeight, barX, barY); // 从下到上
+
+    // 定义与 GLSL 中相同的颜色映射
+    gradient.setColorAt(0.0, QColor(0, 0, 128));       // 深蓝
+    gradient.setColorAt(0.25, QColor(0, 128, 0));      // 绿
+    gradient.setColorAt(0.5, QColor(204, 204, 0));     // 黄
+    gradient.setColorAt(0.75, QColor(255, 255, 255));  // 白
+    gradient.setColorAt(1.0, QColor(255, 255, 255));   // 白（保持）
+
+    // 画颜色条
+    painter.fillRect(barX, barY, barWidth, barHeight, gradient);
+
+    // 可选：画边框
+    painter.setPen(Qt::white);
+    painter.drawRect(barX, barY, barWidth - 1, barHeight - 1);
+
+    // 可选：标注 min/max Z 值
+    painter.setPen(Qt::white);
+    QFont font = painter.font();
+    font.setPointSize(8);
+    painter.setFont(font);
+    QString minText = QString::number(m_bboxMin.z(), 'f', 2);
+    QString maxText = QString::number(m_bboxMax.z(), 'f', 2);
+    painter.drawText(barX - 50, barY + barHeight, minText);
+    painter.drawText(barX - 50, barY, maxText);
+
+    painter.end();
+}
+
 
 // PointCloudWidget.cpp
 void PointCloudWidget::resetView()
@@ -155,7 +206,8 @@ void PointCloudWidget::resetView()
 void PointCloudWidget::setRenderMode(int mode)
 {
     m_renderMode = mode;
-    update();
+    m_showColorBar = (mode == 0); // 仅高程色显示
+    update(); // 触发重绘（包括 paintEvent）
 }
 
 void PointCloudWidget::initializeGL()
@@ -200,6 +252,9 @@ void PointCloudWidget::initializeGL()
 
 void PointCloudWidget::resizeGL(int w, int h)
 {
+    // 设置视口
+    glViewport(0, 0, w, h);
+
     m_projection.setToIdentity();
     float aspect = static_cast<float>(w) / static_cast<float>(h);
     m_projection.perspective(45.0f, aspect, 0.1f, 1000.0f);
@@ -222,7 +277,24 @@ void PointCloudWidget::paintGL()
     glBindVertexArray(0);
 
     m_program.release();
+    
 }
+
+QColor elevationColor(float z, float minZ, float maxZ)
+{
+    // 将z值归一化到[0, 1]区间
+    float t = (z - minZ) / (maxZ - minZ);
+
+    // 如果超出范围，直接返回边界颜色
+    if (t < 0.0f) return Qt::blue;
+    if (t > 1.0f) return Qt::red;
+
+    // 使用线性插值在蓝色和红色之间过渡
+    int red = static_cast<int>(255 * t);       // 红色分量随t增加
+    int blue = 255 - red;                      // 蓝色分量随t减少
+    return QColor(red, 0, blue);               // 返回RGB颜色
+}
+
 
 void PointCloudWidget::mousePressEvent(QMouseEvent* event)
 {
