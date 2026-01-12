@@ -237,7 +237,7 @@ void PointCloudWidget::initializeGL()
     glBindVertexArray(0);
 
     // 初始化坐标轴
-    initAxis();
+    initScreenAxis();
 
     initBoundingBoxGeometry();
 }
@@ -277,76 +277,47 @@ void PointCloudWidget::paintGL()
 
     // 2. 渲染坐标轴（半透明，无深度写入）
     glDepthMask(GL_FALSE);
-    renderAxis();
+    renderScreenAxis();
     glDepthMask(GL_TRUE);
 
     // 3. 渲染边界盒（最后渲染，确保在最前面）
-    //renderBoundingBoxSimple();
     renderBoundingBox();
     
     
 }
 
-
-void PointCloudWidget::renderAxis()
-{
-    if (!m_axisInitialized) return;
-
-    // 就放在包围盒的最小角（世界坐标固定）
-    QVector3D origin = m_center;
-
-    // 向内偏移一点避免遮挡
-    origin += 0.02f * m_bboxSize;
-
-    // 长度 = 包围盒最大边的 10%
-    float L = 0.1f * std::max({ m_bboxSize.x(), m_bboxSize.y(), m_bboxSize.z() });
-
-    QMatrix4x4 model;
-    model.translate(origin);
-    model.scale(L);
-
-    QMatrix4x4 mvp = m_projection * m_view * model;
-
-    // 使用着色器
-    m_axisShader->bind();
-    m_axisShader->setUniformValue("uMVP", mvp);
-
-    // 绑定 VBO
-    m_axisVbo.bind();
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, nullptr);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, reinterpret_cast<void*>(sizeof(float) * 3));
-
-    // 绘制 3 条线（6 个顶点）
-    glLineWidth(3.0f);
-    glDrawArrays(GL_LINES, 0, 6);
-
-    // 解绑
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    m_axisVbo.release();
-    m_axisShader->release();
-}
-
-
-void PointCloudWidget::initAxis()
+void PointCloudWidget::initScreenAxis()
 {
     if (m_axisInitialized) return;
 
     // 1. 创建着色器
     m_axisShader = new QOpenGLShaderProgram(this);
+
+    // 使用视图矩阵的旋转部分，但固定位置
     m_axisShader->addShaderFromSourceCode(QOpenGLShader::Vertex,
         "#version 330 core\n"
         "layout (location = 0) in vec3 aPos;\n"
         "layout (location = 1) in vec3 aColor;\n"
-        "uniform mat4 uMVP;\n"
+        "uniform mat4 uRotation;      // 只包含旋转的矩阵\n"
+        "uniform vec2 uCorner;        // 角落位置 (0-1)\n"
+        "uniform float uSize;         // 大小 (0-1)\n"
         "out vec3 vColor;\n"
         "void main() {\n"
-        "   gl_Position = uMVP * vec4(aPos, 1.0);\n"
+        "   // 应用旋转\n"
+        "   vec4 rotated = uRotation * vec4(aPos, 1.0);\n"
+        "   \n"
+        "   // 映射到屏幕角落\n"
+        "   vec2 screenPos = uCorner + rotated.xy * uSize;\n"
+        "   \n"
+        "   // 转换到NDC (-1到1)\n"
+        "   vec2 ndc = screenPos * 2.0 - 1.0;\n"
+        "   ndc.y = -ndc.y;  // 翻转Y轴\n"
+        "   \n"
+        "   gl_Position = vec4(ndc, 0.999, 1.0);\n"
         "   vColor = aColor;\n"
         "}"
     );
+
     m_axisShader->addShaderFromSourceCode(QOpenGLShader::Fragment,
         "#version 330 core\n"
         "in vec3 vColor;\n"
@@ -355,32 +326,114 @@ void PointCloudWidget::initAxis()
         "   FragColor = vec4(vColor, 1.0);\n"
         "}"
     );
-    m_axisShader->link();
 
-    // 2. 准备顶点数据：每条线两个点 + RGB 颜色
+    if (!m_axisShader->link()) return;
+
+    // 2. 准备顶点数据（单位长度的坐标轴）
     struct Vertex {
         float x, y, z;
         float r, g, b;
     };
+
     std::vector<Vertex> vertices = {
-        // X 轴：红
+        // X轴（红）
         {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f},
         {1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f},
-        // Y 轴：绿
+        // Y轴（绿）
         {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f},
         {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f},
-        // Z 轴：蓝
+        // Z轴（蓝）
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f},
         {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f}
     };
 
-    // 3. 创建 VBO
     m_axisVbo.create();
     m_axisVbo.bind();
-    m_axisVbo.allocate(vertices.data(), static_cast<int>(vertices.size() * sizeof(Vertex)));
+    m_axisVbo.allocate(vertices.data(),
+        static_cast<int>(vertices.size() * sizeof(Vertex)));
     m_axisVbo.release();
 
     m_axisInitialized = true;
+}
+
+void PointCloudWidget::renderScreenAxis()
+{
+    if (!m_axisInitialized) return;
+
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    m_axisShader->bind();
+
+    // 从视图矩阵提取旋转（移除平移）
+    QMatrix4x4 rotation = m_view;
+    rotation.setColumn(3, QVector4D(0, 0, 0, 1));
+
+    // 左下角位置和大小
+    QVector2D corner(0.05f, 0.75f);  // 左下角，稍微靠上一点
+    float size = 0.15f;              // 占屏幕的15%
+
+    m_axisShader->setUniformValue("uRotation", rotation);
+    m_axisShader->setUniformValue("uCorner", corner);
+    m_axisShader->setUniformValue("uSize", size);
+
+    // 渲染
+    glLineWidth(2.5f);
+    m_axisVbo.bind();  // 重用现有的坐标轴VBO
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        sizeof(float) * 6, nullptr);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+        sizeof(float) * 6,
+        reinterpret_cast<void*>(sizeof(float) * 3));
+
+    glDrawArrays(GL_LINES, 0, 6);
+
+    // 清理
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    m_axisVbo.release();
+    m_axisShader->release();
+
+    // 恢复状态
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+
+    // 可选：添加标签
+    renderCornerAxisLabels(rotation);
+}
+
+void PointCloudWidget::renderCornerAxisLabels(const QMatrix4x4& rotation)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // 计算标签位置（屏幕坐标）
+    int axisSize = width() * 0.15f;
+    int startX = width() * 0.05f;
+    int startY = height() * 0.75f;
+
+    // 应用相同的旋转到单位向量
+    QVector3D xDir = rotation.map( QVector3D(1, 0, 0));
+    QVector3D yDir = rotation.map(QVector3D(0, 1, 0));
+    QVector3D zDir = rotation.map(QVector3D(0, 0, 1));
+
+    // 绘制标签
+    painter.setPen(Qt::red);
+    painter.drawText(startX + xDir.x() * axisSize + 10,
+        startY - xDir.y() * axisSize, "X");
+
+    painter.setPen(Qt::green);
+    painter.drawText(startX + yDir.x() * axisSize + 10,
+        startY - yDir.y() * axisSize, "Y");
+
+    painter.setPen(Qt::blue);
+    painter.drawText(startX + zDir.x() * axisSize + 10,
+        startY - zDir.y() * axisSize, "Z");
+
+    painter.end();
 }
 
 void PointCloudWidget::updateBoundingBoxGeometry()
@@ -482,82 +535,7 @@ void PointCloudWidget::initBoundingBoxGeometry()
     m_boxInitialized = true;
 }
 
-// 另一种更简单的实现方式
-void PointCloudWidget::renderBoundingBoxSimple()
-{
-    if (m_boxVertices.empty() || m_points.empty()) return;
 
-    // 创建临时着色器
-    static bool shaderInitialized = false;
-    static QOpenGLShaderProgram simpleShader;
-
-    if (!shaderInitialized) {
-        simpleShader.addShaderFromSourceCode(QOpenGLShader::Vertex,
-            "#version 330 core\n"
-            "layout (location = 0) in vec3 aPos;\n"
-            "uniform mat4 uMVP;\n"
-            "void main() {\n"
-            "   gl_Position = uMVP * vec4(aPos, 1.0);\n"
-            "}"
-        );
-        simpleShader.addShaderFromSourceCode(QOpenGLShader::Fragment,
-            "#version 330 core\n"
-            "out vec4 FragColor;\n"
-            "void main() {\n"
-            "   FragColor = vec4(1.0, 0.8, 0.2, 0.8);\n" // 金色，半透明
-            "}"
-        );
-        simpleShader.link();
-        shaderInitialized = true;
-    }
-
-    // 启用混合和线条抗锯齿
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-    glLineWidth(2.0f);
-    glDepthMask(GL_FALSE);
-
-    // 绑定着色器和数据
-    simpleShader.bind();
-    QMatrix4x4 mvp = m_projection * m_view;
-    simpleShader.setUniformValue("uMVP", mvp);
-
-    // 使用临时VBO
-    GLuint vbo;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER,
-        m_boxVertices.size() * sizeof(float),
-        m_boxVertices.data(),
-        GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
-
-    // 直接绘制12条边
-    GLuint edges[] = {
-        0,1, 1,2, 2,3, 3,0,  // 底面
-        4,5, 5,6, 6,7, 7,4,  // 顶面
-        0,4, 1,5, 2,6, 3,7   // 垂直边
-    };
-
-    for (int i = 0; i < 24; i += 2) {
-        glDrawArrays(GL_LINES, edges[i], 2);
-    }
-
-    // 清理
-    glDisableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glDeleteBuffers(1, &vbo);
-    simpleShader.release();
-
-    // 恢复状态
-    glLineWidth(1.0f);
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
-}
 void PointCloudWidget::renderBoundingBox()
 {
     if (!m_boxInitialized || m_boxVertices.empty() || m_points.empty()) {

@@ -69,8 +69,9 @@ private:
     QOpenGLBuffer m_axisVbo;
     bool m_axisInitialized = false;
 
-    void initAxis();
-    void renderAxis();
+    void initScreenAxis();
+    void renderScreenAxis();
+    void renderCornerAxisLabels(const QMatrix4x4& rotation);
 
     // ±ﬂΩÁ∫–œ‡πÿ
     QOpenGLShaderProgram* m_boxShader;
@@ -81,7 +82,6 @@ private:
 
     void initBoundingBoxGeometry();
     void renderBoundingBox();
-    void renderBoundingBoxSimple();
     void updateBoundingBoxGeometry();
 };
 
