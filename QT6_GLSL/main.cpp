@@ -11,7 +11,7 @@ int main(int argc, char* argv[])
     widget.show();
 
     // 可选：自动加载示例数据（需在 build 目录有 data/sample.txt）
-    widget.loadPointCloud(QString::fromLocal8Bit("D:\\data-example\\point-inter\\矿体数据补洞.txt"));
-
+    widget.loadPointCloud(QString::fromLocal8Bit("D:\\data-example\\point-inter\\矿体数据补洞RGB.txt"));
+    widget.setRenderMode(1);
     return app.exec();
 }

@@ -101,20 +101,6 @@ void PointCloudWidget::loadPointCloud(const QString& filename)
         float g = colors[i + 1];
         float b = colors[i + 2];
 
-        // 归一化 z 用于高程色（存入 color 的 r/g/b 不影响，我们用 aPos.z）
-        // 但注意：顶点位置仍然是原始 x,y,z！
-        float zNorm = (z - m_bboxMin.z()) / zRange;
-
-        // 我们仍然上传 [x, y, z, r, g, b] 到 GPU
-        // —— 顶点着色器中 aPos.z 就是原始 z，但我们希望高程色用归一化值？
-        // 方案：要么传 zNorm 作为额外 attribute，要么在 CPU 归一化 z 后上传
-        // 这里为了简单，**上传归一化后的 z 作为顶点 z**（仅影响高程色，不影响几何？）
-        // ❌ 错误！会影响几何位置！
-
-        // ✅ 正确做法：顶点位置保持原始 xyz，额外传一个 normalizedZ 作为 color 或 attribute
-        // 但为简化，我们改用：在顶点着色器中用 uniform 传 minZ/maxZ 来归一化
-        // → 更好！无需修改顶点数据
-
         // 因此，这里我们**不修改 z**，保持原始几何
         m_points.insert(m_points.end(), { x, y, z, r, g, b });
     }
