@@ -38,6 +38,9 @@ protected:
 private:
     void updateCamera();
 
+    int m_glWidth;
+    int m_glHeight;
+
     QOpenGLShaderProgram m_program;
     GLuint m_vao = 0;
     GLuint m_vbo = 0;
@@ -67,11 +70,19 @@ private:
     // 坐标轴相关
     QOpenGLShaderProgram* m_axisShader = nullptr;
     QOpenGLBuffer m_axisVbo;
+    QOpenGLBuffer m_axisVao;
     bool m_axisInitialized = false;
+    // 可选：缓存轴长（像素单位）
+    float m_axisLength = 40.0f; // 像素
 
+    //绘制方法一
     void initScreenAxis();
     void renderScreenAxis();
     void renderCornerAxisLabels(const QMatrix4x4& rotation);
+
+    //绘制方法二
+    void initScreenAxisOrtho();
+    void renderScreenAxisOrtho();
 
     // 边界盒相关
     QOpenGLShaderProgram* m_boxShader;

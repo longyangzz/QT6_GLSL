@@ -237,7 +237,8 @@ void PointCloudWidget::initializeGL()
     glBindVertexArray(0);
 
     // 初始化坐标轴
-    initScreenAxis();
+    //initScreenAxis();
+    initScreenAxisOrtho();
 
     initBoundingBoxGeometry();
 }
@@ -246,6 +247,8 @@ void PointCloudWidget::resizeGL(int w, int h)
 {
     // 设置视口
     glViewport(0, 0, w, h);
+    m_glHeight = h;
+    m_glWidth = w;
 
     m_projection.setToIdentity();
     float aspect = static_cast<float>(w) / static_cast<float>(h);
@@ -277,7 +280,8 @@ void PointCloudWidget::paintGL()
 
     // 2. 渲染坐标轴（半透明，无深度写入）
     glDepthMask(GL_FALSE);
-    renderScreenAxis();
+    //renderScreenAxis();
+    renderScreenAxisOrtho();
     glDepthMask(GL_TRUE);
 
     // 3. 渲染边界盒（最后渲染，确保在最前面）
@@ -403,6 +407,138 @@ void PointCloudWidget::renderScreenAxis()
 
     // 可选：添加标签
     renderCornerAxisLabels(rotation);
+}
+
+void PointCloudWidget::initScreenAxisOrtho()
+{
+    if (m_axisInitialized) return;
+
+    // 1. 创建着色器（使用正交投影矩阵）
+    m_axisShader = new QOpenGLShaderProgram(this);
+
+    m_axisShader->addShaderFromSourceCode(QOpenGLShader::Vertex,
+        "#version 330 core\n"
+        "layout (location = 0) in vec3 aPos;\n"
+        "layout (location = 1) in vec3 aColor;\n"
+        "uniform mat4 uProjection;\n"
+        "out vec3 vColor;\n"
+        "void main() {\n"
+        "   gl_Position = uProjection * vec4(aPos, 1.0);\n"
+        "   vColor = aColor;\n"
+        "}"
+    );
+
+    m_axisShader->addShaderFromSourceCode(QOpenGLShader::Fragment,
+        "#version 330 core\n"
+        "in vec3 vColor;\n"
+        "out vec4 FragColor;\n"
+        "void main() {\n"
+        "   FragColor = vec4(vColor, 1.0);\n"
+        "}"
+    );
+
+    if (!m_axisShader->link()) {
+        qWarning() << "Screen axis shader link failed:" << m_axisShader->log();
+        return;
+    }
+
+    // --- 2. 构建顶点数据：轴线 + 字母（Z/X/Y）---
+    struct Vertex {
+        float x, y, z;
+        float r, g, b;
+    };
+    std::vector<Vertex> vertices;
+
+    const float L = 30.0f; // 轴长度
+    const float W = 5.0f;  // 字母大小
+
+    // ---- Z 轴（蓝色）----
+    // 轴线
+    vertices.push_back({ 0, 0, 0, 0, 0, 1 });
+    vertices.push_back({ 0, 0, L, 0, 0, 1 });
+    
+
+    // ---- X 轴（红色）----
+    // 轴线
+    vertices.push_back({ 0, 0, 0, 1, 0, 0 });
+    vertices.push_back({ L, 0, 0, 1, 0, 0 });
+    
+
+    // ---- Y 轴（绿色）----
+    // 轴线
+    vertices.push_back({ 0, 0, 0, 0, 1, 0 });
+    vertices.push_back({ 0, L, 0, 0, 1, 0 });
+    
+
+    // 3. 创建VBO
+    m_axisVbo.create();
+    m_axisVbo.bind();
+    m_axisVbo.allocate(vertices.data(),
+        static_cast<int>(vertices.size() * sizeof(vertices)));
+    m_axisVbo.release();
+
+    m_axisInitialized = true;
+}
+
+void PointCloudWidget::renderScreenAxisOrtho()
+{
+    if (!m_axisInitialized) return;
+
+    glDisable(GL_DEPTH_TEST);
+    glLineWidth(3.0f);
+    glEnable(GL_LINE_SMOOTH);
+
+    // 创建正交投影矩阵（覆盖整个屏幕）
+    // 屏幕左下角偏移（像素）
+    float margin = 50.0f;
+    float posX = -static_cast<float>(m_glWidth) / 2.0f + margin;
+    float posY = -static_cast<float>(m_glHeight) / 2.0f + margin;
+
+    // 构建正交投影（像素空间）
+    QMatrix4x4 ortho;
+    ortho.setToIdentity();
+    ortho.ortho(
+        -static_cast<float>(m_glWidth) / 2.0f,
+        static_cast<float>(m_glWidth) / 2.0f,
+        -static_cast<float>(m_glHeight) / 2.0f,
+        static_cast<float>(m_glHeight) / 2.0f,
+        -1000.0f, 1000.0f
+    );
+
+    QMatrix4x4 viewMatrix = m_view; // 假设这是你的视图矩阵
+    QMatrix3x3 rotationMatrix = viewMatrix.normalMatrix(); // 获取用于法线变换的3x3子矩阵，实际上就是旋转部分
+    // 创建坐标轴的模型矩阵
+    QMatrix4x4 modelMatrix;
+    modelMatrix.setToIdentity(); // 初始化为单位矩阵
+
+    // 将提取的旋转应用到模型矩阵上
+    // 注意，这里可能需要根据实际情况调整旋转的方向或顺序
+    modelMatrix.rotate(QQuaternion::fromRotationMatrix(rotationMatrix));
+    //平移到posX posY
+    QMatrix4x4 model;
+    model.translate(posX, posY, 0.0f);
+    QMatrix4x4 mvp = ortho * model * modelMatrix;
+
+    // 渲染
+    m_axisShader->bind();
+    m_axisShader->setUniformValue("uProjection", mvp);
+
+    m_axisVbo.bind();
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        sizeof(float) * 6, nullptr);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+        sizeof(float) * 6,
+        reinterpret_cast<void*>(sizeof(float) * 3));
+
+    glDrawArrays(GL_LINES, 0, 6);
+
+    // 清理
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    m_axisVbo.release();
+    m_axisShader->release();
 }
 
 void PointCloudWidget::renderCornerAxisLabels(const QMatrix4x4& rotation)
