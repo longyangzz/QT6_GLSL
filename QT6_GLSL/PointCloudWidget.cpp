@@ -184,7 +184,7 @@ void PointCloudWidget::resetView()
 
     // 相机距离：根据场景大小自动调整
     m_distance = m_sceneRadius * 2.5f; // 可调系数（2~3 倍半径通常合适）
-
+    m_logDistance = log(m_distance);
     updateCamera();
 }
 
@@ -634,13 +634,24 @@ void PointCloudWidget::mouseMoveEvent(QMouseEvent* event)
     m_lastMousePos = event->pos();
 }
 
+// 在类中增加一个 float m_logDistance;
+// 初始化：m_logDistance = log(m_distance);
+
 void PointCloudWidget::wheelEvent(QWheelEvent* event)
 {
-    m_distance *= (event->angleDelta().y() > 0) ? 0.9f : 1.1f;
-    m_distance = qBound(1.0f, m_distance, 100.0f);
+    const float zoomSpeed = 0.1f;
+    if (event->angleDelta().y() > 0) {
+        m_logDistance -= zoomSpeed; // 放大
+    }
+    else {
+        m_logDistance += zoomSpeed; // 缩小
+    }
+    m_distance = std::exp(m_logDistance);
+    m_distance = std::max(0.01f, m_distance); // 仅限制最小值
     updateCamera();
     update();
 }
+
 
 void PointCloudWidget::updateCamera()
 {

@@ -52,6 +52,7 @@ private:
     float m_yaw = -90.0f;
     float m_pitch = -20.0f;
     float m_distance = 15.0f;
+    float m_logDistance;
 
     int m_renderMode = 0; // 0: elevation, 1: RGB
 
