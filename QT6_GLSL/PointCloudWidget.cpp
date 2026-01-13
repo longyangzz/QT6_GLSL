@@ -700,9 +700,14 @@ void PointCloudWidget::initBoundingBoxGeometry()
     }
 
     // 2. 初始化为空数据，稍后由 updateBoundingBoxGeometry 填充
+    m_boxVao.create();
+    m_boxVao.bind();
     m_boxVbo.create();
-    m_boxVbo.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+    m_boxVbo.bind();
 
+    m_boxVbo.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
     m_boxInitialized = true;
 }
 
@@ -741,19 +746,13 @@ void PointCloudWidget::renderBoundingBox()
     m_boxShader->setUniformValue("uAlpha", 0.8f); // 80%不透明度
 
     // 绑定顶点数据
-    m_boxVbo.bind();
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
-
+    m_boxVao.bind();
     // 绘制所有边
     glDrawElements(GL_LINES,
         static_cast<GLsizei>(m_boxIndices.size()),
         GL_UNSIGNED_INT,
         m_boxIndices.data());
-
-    // 清理
-    glDisableVertexAttribArray(0);
-    m_boxVbo.release();
+    m_boxVao.release();
     m_boxShader->release();
 
     // 恢复渲染状态
