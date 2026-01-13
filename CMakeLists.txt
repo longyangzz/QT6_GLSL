@@ -65,8 +65,8 @@ install(FILES "C:/Windows/SysWOW64/opengl32.dll" DESTINATION bin)
 # Basic CPack settings
 set(CPACK_PACKAGE_NAME "${LOCAL_PROJECT_NAME}")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_PACKAGE_CONTACT "you@example.com")
-set(CPACK_PACKAGE_VENDOR "Your Name or Company")
+set(CPACK_PACKAGE_CONTACT "451215954@qq.com")
+set(CPACK_PACKAGE_VENDOR "BCZC")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Example Qt app packaged via CPack")
 
 # 假设资源在项目根目录的 res/ 文件夹
