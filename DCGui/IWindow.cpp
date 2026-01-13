@@ -245,6 +245,11 @@ void IWindow::ConfigSplash()
 	QCoreApplication::setApplicationName(m_pUI->m_ConfigParser->GetSoftName(true));
 }
 
+void IWindow::SetLicenseText(QString txt)
+{
+	m_licenseText = txt;
+}
+
 QString IWindow::GetLicenseState()
 {
 	return m_pUI->m_ConfigParser->GetLicenseState();

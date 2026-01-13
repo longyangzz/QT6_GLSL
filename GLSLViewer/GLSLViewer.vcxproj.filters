@@ -23,32 +23,19 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <QtUic Include="BCGP.ui">
-      <Filter>Form Files</Filter>
-    </QtUic>
-    <QtMoc Include="BCGP.h">
+    <ClInclude Include="glslviewer_global.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <QtMoc Include="GLSLViewer.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <ClCompile Include="BCGP.cpp">
+    <ClCompile Include="GLSLViewer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Mdiarea.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <QtRcc Include="resource.qrc">
+    <QtRcc Include="QT6_GLSL.qrc">
       <Filter>Resource Files</Filter>
     </QtRcc>
-  </ItemGroup>
-  <ItemGroup>
-    <QtMoc Include="Mdiarea.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
   </ItemGroup>
 </Project>

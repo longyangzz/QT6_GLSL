@@ -68,6 +68,8 @@ namespace DCGui
 
 		//! 保存相关设置参数
 		void SaveSettings();
+
+		void SetLicenseText(QString txt);
 	private:
 		//启动画面
 		void ConfigSplash();
@@ -96,6 +98,8 @@ namespace DCGui
 		//软件简称加版本号
 		QString m_org;
 		QString m_title;
+
+		QString m_licenseText;
 	};
 }
 

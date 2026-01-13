@@ -5,5 +5,6 @@
   <Project Path="BCGP/BCGP.vcxproj" Id="046c944a-5e28-4bde-9dff-94a88b6204ad" />
   <Project Path="DCGui/DCGui.vcxproj" Id="2eb788a6-9b25-44e2-894c-ea347e05500c" />
   <Project Path="DCLCMG/DCLCMG.vcxproj" Id="a93075d8-a0af-4c56-a71a-ff02aa4caf84" />
+  <Project Path="GLSLViewer/GLSLViewer.vcxproj" Id="490e4d5c-5307-4482-9628-b7216a2f48ae" />
   <Project Path="QT6_GLSL/QT6_GLSL.vcxproj" Id="34b91b2a-f09c-431a-a3ff-6c8c9bccfa06" />
 </Solution>
