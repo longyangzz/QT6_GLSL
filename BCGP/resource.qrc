@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/img">
+        <file>resources/file_open.png</file>
+        <file>resources/file_save.png</file>
+        <file>Resources/gpbg.png</file>
+    </qresource>
+</RCC>
