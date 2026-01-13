@@ -504,12 +504,23 @@ void PointCloudWidget::initScreenAxisOrtho()
     vertices.push_back({ 0, L + W + 5, 0, 0, 1, 0 });
     vertices.push_back({ W, L + W + 10, 0, 0, 1, 0 });
 
-    // 3. 创建VBO
+    // 3. 创建VBO VAO
+    m_axisVao.create();
+    m_axisVao.bind();
     m_axisVbo.create();
     m_axisVbo.bind();
     m_axisVbo.allocate(vertices.data(),
         static_cast<int>(vertices.size() * sizeof(vertices)));
+
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        sizeof(float) * 6, nullptr);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+        sizeof(float) * 6,
+        reinterpret_cast<void*>(sizeof(float) * 3));
     m_axisVbo.release();
+    m_axisVao.release();
 
     m_axisInitialized = true;
 }
@@ -557,21 +568,11 @@ void PointCloudWidget::renderScreenAxisOrtho()
     m_axisShader->bind();
     m_axisShader->setUniformValue("uProjection", mvp);
 
-    m_axisVbo.bind();
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
-        sizeof(float) * 6, nullptr);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
-        sizeof(float) * 6,
-        reinterpret_cast<void*>(sizeof(float) * 3));
-
+    m_axisVao.bind();
     glDrawArrays(GL_LINES, 0, 24);
 
     // 清理
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    m_axisVbo.release();
+    m_axisVao.release();
     m_axisShader->release();
 }
 

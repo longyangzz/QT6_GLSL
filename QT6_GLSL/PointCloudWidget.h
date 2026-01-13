@@ -76,7 +76,7 @@ private:
     // 坐标轴相关
     QOpenGLShaderProgram* m_axisShader = nullptr;
     QOpenGLBuffer m_axisVbo;
-    QOpenGLBuffer m_axisVao;
+    QOpenGLVertexArrayObject m_axisVao;
     bool m_axisInitialized = false;
     // 可选：缓存轴长（像素单位）
     float m_axisLength = 40.0f; // 像素
@@ -93,6 +93,7 @@ private:
     // 边界盒相关
     QOpenGLShaderProgram* m_boxShader;
     QOpenGLBuffer m_boxVbo;
+    QOpenGLVertexArrayObject m_boxVao;
     bool m_boxInitialized;
     std::vector<float> m_boxVertices; // 存储边界盒顶点数据
     std::vector<unsigned int> m_boxIndices; // 存储边界盒索引数据
