@@ -35,12 +35,16 @@ public:
     void OpenProject(QString proName);
     QWidget* ActiveMdiChild();
 
+    GLSLViewer* CurrentDCViewer();
 private slots:
     //! 导入数据，创建新窗口
     void ImportData();
 
     //! 导入数据到指定的窗口中
     //void ImportDataToView();
+
+    //! 改变当前窗体（MDI通知主窗口）
+    void ChangedCurrentViewer(QMdiSubWindow* subWindow);
 private:
     Ui::BCGPClass ui;
 

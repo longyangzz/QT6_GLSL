@@ -70,6 +70,19 @@ void BCGP::Init()
     statusBar()->showMessage(QString::fromLocal8Bit("ok"));
 }
 
+GLSLViewer* BCGP::CurrentDCViewer()
+{
+    GLSLViewer* pViewer = static_cast<GLSLViewer*>(ActiveMdiChild());
+    return pViewer;
+}
+
+//! 改变当前窗体
+void BCGP::ChangedCurrentViewer(QMdiSubWindow* subWindow)
+{
+    GLSLViewer* pViewer = CurrentDCViewer();
+    //发送消息信号通知窗口改变了
+}
+
 //! 加载文件
 int BCGP::LoadFile(const QString& fileName, GLSLViewer* viewer)
 {
