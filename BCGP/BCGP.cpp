@@ -87,7 +87,7 @@ int BCGP::LoadFile(const QString& fileName, GLSLViewer* viewer)
     QMdiSubWindow* subWindow = m_pMdiArea->addSubWindow(pNewViewer);
     subWindow->setAttribute(Qt::WA_DeleteOnClose);
     subWindow->setMinimumSize(300, 200);
-
+    subWindow->setWindowTitle("GLSL Viewer");
     
     //最大化显示，初始化opengl环境后才能加载数据
     pNewViewer->showMaximized();
