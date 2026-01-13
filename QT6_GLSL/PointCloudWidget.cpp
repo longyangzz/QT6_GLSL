@@ -15,8 +15,9 @@ PointCloudWidget::PointCloudWidget(QWidget* parent)
 PointCloudWidget::~PointCloudWidget()
 {
     makeCurrent();
-    glDeleteBuffers(1, &m_vbo);
-    glDeleteVertexArrays(1, &m_vao);
+    // 释放 OpenGL 资源
+    m_vao.destroy();
+    m_vbo.destroy();
     doneCurrent();
 }
 
@@ -111,8 +112,10 @@ void PointCloudWidget::loadPointCloud(const QString& filename)
     // === 上传到 GPU ===
     if (isValid()) {
         makeCurrent();
-        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-        glBufferData(GL_ARRAY_BUFFER, m_points.size() * sizeof(float), m_points.data(), GL_STATIC_DRAW);
+        m_vbo.bind();
+        m_vbo.allocate(m_points.data(),
+            static_cast<int>(m_points.size() * sizeof(float)));
+        m_vbo.release();
         doneCurrent();
     }
 
@@ -204,37 +207,8 @@ void PointCloudWidget::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_PROGRAM_POINT_SIZE);
 
-    // 编译着色器（从文件）
-    if (!m_program.addShaderFromSourceFile(QOpenGLShader::Vertex, ":/shaders/shaders/pointcloud.vert")) {
-        qCritical() << "Failed to compile vertex shader";
-        return;
-    }
-    if (!m_program.addShaderFromSourceFile(QOpenGLShader::Fragment, ":/shaders/shaders/pointcloud.frag")) {
-        qCritical() << "Failed to compile fragment shader";
-        return;
-    }
-    if (!m_program.link()) {
-        qCritical() << "Failed to link shader program";
-        return;
-    }
-
-    // Create VAO/VBO
-    glGenVertexArrays(1, &m_vao);
-    glGenBuffers(1, &m_vbo);
-
-    glBindVertexArray(m_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    if (!m_points.empty()) {
-        glBufferData(GL_ARRAY_BUFFER, m_points.size() * sizeof(float), m_points.data(), GL_STATIC_DRAW);
-    }
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    //点云着色器
+    initPointCloud();
 
     // 初始化坐标轴
     //initScreenAxis();
@@ -263,20 +237,7 @@ void PointCloudWidget::paintGL()
     //glEnable(GL_DEPTH_TEST);   // 必须开启深度测试
     //glDisable(GL_BLEND);       // 避免混合干扰
     //glDisable(GL_CULL_FACE);   // 坐标轴无背面
-    if (m_points.empty()) return;
-
-    m_program.bind();
-    m_program.setUniformValue("uProjection", m_projection);
-    m_program.setUniformValue("uView", m_view);
-    m_program.setUniformValue("uRenderMode", m_renderMode);
-    m_program.setUniformValue("uMinZ", m_bboxMin.z());
-    m_program.setUniformValue("uMaxZ", m_bboxMax.z());
-
-    glBindVertexArray(m_vao);
-    glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(m_points.size() / 6));
-    glBindVertexArray(0);
-
-    m_program.release();
+    renderPointCloud();
 
     // 2. 渲染坐标轴（半透明，无深度写入）
     glDepthMask(GL_FALSE);
@@ -288,6 +249,63 @@ void PointCloudWidget::paintGL()
     renderBoundingBox();
     
     
+}
+
+void PointCloudWidget::initPointCloud()
+{ 
+    // 编译着色器（从文件）
+    m_program = new QOpenGLShaderProgram(this);
+    if (!m_program->addShaderFromSourceFile(QOpenGLShader::Vertex, ":/shaders/shaders/pointcloud.vert")) {
+        qCritical() << "Failed to compile vertex shader";
+        return;
+    }
+    if (!m_program->addShaderFromSourceFile(QOpenGLShader::Fragment, ":/shaders/shaders/pointcloud.frag")) {
+        qCritical() << "Failed to compile fragment shader";
+        return;
+    }
+    if (!m_program->link()) {
+        qCritical() << "Failed to link shader program";
+        return;
+    }
+
+    // Create VAO/VBO
+    m_vao.create();
+    m_vbo.create();
+    m_vao.bind();
+    m_vbo.bind();
+
+    if (!m_points.empty()) {
+        m_vbo.allocate(m_points.data(),
+            static_cast<int>(m_points.size() * sizeof(float)));
+    }
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // Unbind
+    m_vbo.release();
+    m_vao.release();
+    
+}
+
+void PointCloudWidget::renderPointCloud()
+{ 
+    if (m_points.empty()) return;
+
+    m_program->bind();
+    m_program->setUniformValue("uProjection", m_projection);
+    m_program->setUniformValue("uView", m_view);
+    m_program->setUniformValue("uRenderMode", m_renderMode);
+    m_program->setUniformValue("uMinZ", m_bboxMin.z());
+    m_program->setUniformValue("uMaxZ", m_bboxMax.z());
+
+    m_vao.bind();
+    glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(m_points.size() / 6));
+
+    m_vao.release();
+    m_program->release();
 }
 
 void PointCloudWidget::initScreenAxis()

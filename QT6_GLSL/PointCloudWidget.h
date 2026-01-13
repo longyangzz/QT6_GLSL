@@ -13,6 +13,7 @@
 #include <vector>
 #include <limits>
 #include <QOpenGLBuffer>
+#include <QOpenGLVertexArrayObject>
 
 class PointCloudWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core
 {
@@ -41,10 +42,15 @@ private:
     int m_glWidth;
     int m_glHeight;
 
-    QOpenGLShaderProgram m_program;
-    GLuint m_vao = 0;
-    GLuint m_vbo = 0;
+    //点云数据
+    QOpenGLShaderProgram* m_program = nullptr;
+    QOpenGLVertexArrayObject m_vao;
+    QOpenGLBuffer m_vbo;
 
+    void initPointCloud();
+    void renderPointCloud();
+
+    //相机场景相关
     std::vector<float> m_points; // [x, y, z, r, g, b]
     float m_minZ = 0.0f, m_maxZ = 1.0f;
 
