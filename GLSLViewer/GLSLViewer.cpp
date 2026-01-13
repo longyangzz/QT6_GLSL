@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QPainter>
 #include <QLinearGradient>
+// 修复 C26495: 始终初始化成员变量
 GLSLViewer::GLSLViewer(QWidget* parent)
     : QOpenGLWidget(parent)
     , m_renderMode(0)
@@ -12,7 +13,10 @@ GLSLViewer::GLSLViewer(QWidget* parent)
     , m_axisLength(40.0f)
     , m_showColorBar(false)
     , m_axisInitialized(false)
-
+    , m_boxShader(nullptr)         // 明确初始化
+    , m_glHeight(0)                // 明确初始化
+    , m_glWidth(0)                 // 明确初始化
+    , m_logDistance(1.0f)          // 明确初始化
 {
     setFocusPolicy(Qt::StrongFocus);
 }
@@ -46,6 +50,10 @@ void GLSLViewer::loadPointCloud(const QString& filename)
         std::numeric_limits<float>::lowest());
 
     QTextStream in(&file);
+
+    //根据是否大于3列，判断是否有rgb颜色
+    bool isHaveColor = false;
+
     while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
         if (line.isEmpty()) continue;
@@ -74,6 +82,7 @@ void GLSLViewer::loadPointCloud(const QString& filename)
             r = qBound(0.0f, parts[3].toFloat() / 255.0f, 1.0f);
             g = qBound(0.0f, parts[4].toFloat() / 255.0f, 1.0f);
             b = qBound(0.0f, parts[5].toFloat() / 255.0f, 1.0f);
+            isHaveColor = true;
         }
         colors.insert(colors.end(), { r, g, b });
     }
@@ -83,6 +92,9 @@ void GLSLViewer::loadPointCloud(const QString& filename)
         return;
     }
 
+    //设置默认渲染模式有rgb则真彩色，没有rgb则高程色渲染
+    // 不管是否有rgb，加载到内存中的数据都是6列 ，没有rgb的用的白色
+    setRenderMode(isHaveColor ? 1 : 0);
     // === 计算场景中心和半径 ===
     m_center = (m_bboxMin + m_bboxMax) * 0.5f;
     m_bboxSize = m_bboxMax - m_bboxMin;
@@ -124,13 +136,13 @@ void GLSLViewer::loadPointCloud(const QString& filename)
         doneCurrent();
     }
 
+    updateBoundingBoxGeometry();
+
     // === 自动重置视图 ===
     resetView();
 
     update();
-
-    m_showColorBar = (m_renderMode == 0); // 高程色模式才显示
-    updateBoundingBoxGeometry();
+    
 }
 
 void GLSLViewer::paintEvent(QPaintEvent* event)
