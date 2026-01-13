@@ -2,7 +2,8 @@
 
 #include "QGridLayout"
 #include "MdiArea.h"
-
+#include "QSettings"
+#include "QFileDialog"
 #include "GLSLViewer/GLSLViewer.h"
 
 static BCGP* s_instance = nullptr;
@@ -72,7 +73,24 @@ void BCGP::Init()
 //! 加载文件
 int BCGP::LoadFile(const QString& fileName, GLSLViewer* viewer)
 {
-	
+    //!2 创建一个view，视窗与view共享场景根节点
+    GLSLViewer* pNewViewer = new GLSLViewer(this);
+    
+    //判断是否存在窗口
+    QList<QMdiSubWindow*> subWindowList = m_pMdiArea->subWindowList();
+    GLSLViewer* otherWin = 0;
+    if (!subWindowList.isEmpty())
+    {
+        otherWin = static_cast<GLSLViewer*>(subWindowList[0]->widget());
+    }
+
+    m_pMdiArea->addSubWindow(pNewViewer)->setAttribute(Qt::WA_DeleteOnClose);;
+
+    
+    //最大化显示，初始化opengl环境后才能加载数据
+    pNewViewer->showMaximized();
+
+    pNewViewer->loadPointCloud(fileName);
 	return 0;
 }
 
@@ -100,4 +118,33 @@ QWidget* BCGP::ActiveMdiChild()
     {
         return nullptr;
     }
+}
+
+//! 导入点云数据到新的站点
+void BCGP::ImportData()
+{
+    //记录文件路径
+    QSettings settings;
+    settings.beginGroup("ImporData");
+    QString currentPath = settings.value("ImporDataPath", QApplication::applicationDirPath()).toString();
+
+    //! 选取文件名
+    QStringList fileNames = QFileDialog::getOpenFileNames(this, tr("Open file"), currentPath);
+
+    if (fileNames.isEmpty())
+    {
+        return;
+    }
+
+    //! 读取数据，并创建窗口，添加到管理模块中
+    for (int i = 0; i != fileNames.size(); ++i)
+    {
+        LoadFile(fileNames[i], nullptr);
+    }
+
+    //更新当前保存的文件路径和文件过滤类型值
+    currentPath = QFileInfo(fileNames[0]).absolutePath();
+    //将更新的值保存到settings中
+    settings.setValue("ImporDataPath", currentPath);
+    settings.endGroup();
 }

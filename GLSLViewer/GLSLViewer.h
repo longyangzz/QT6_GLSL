@@ -95,7 +95,7 @@ private:
     QOpenGLShaderProgram* m_boxShader;
     QOpenGLBuffer m_boxVbo;
     QOpenGLVertexArrayObject m_boxVao;
-    bool m_boxInitialized;
+    bool m_boxInitialized = false;
     std::vector<float> m_boxVertices; // 存储边界盒顶点数据
     std::vector<unsigned int> m_boxIndices; // 存储边界盒索引数据
 

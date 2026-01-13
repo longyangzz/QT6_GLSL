@@ -8,6 +8,11 @@ GLSLViewer::GLSLViewer(QWidget* parent)
     , m_renderMode(0)
     , m_distance(1.0f)
     , m_sceneRadius(0.0f)
+    , m_boxInitialized(false)
+    , m_axisLength(40.0f)
+    , m_showColorBar(false)
+    , m_axisInitialized(false)
+
 {
     setFocusPolicy(Qt::StrongFocus);
 }

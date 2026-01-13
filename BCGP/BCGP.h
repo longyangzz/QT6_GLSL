@@ -34,6 +34,13 @@ public:
     //! 打开工程
     void OpenProject(QString proName);
     QWidget* ActiveMdiChild();
+
+private slots:
+    //! 导入数据，创建新窗口
+    void ImportData();
+
+    //! 导入数据到指定的窗口中
+    //void ImportDataToView();
 private:
     Ui::BCGPClass ui;
 
