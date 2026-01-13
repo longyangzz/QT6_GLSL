@@ -43,4 +43,29 @@ target_link_libraries(${LIB_NAME} PRIVATE
 # =============== 5. 设置 C++ 标准（可选） ===============
 target_compile_features(${LIB_NAME} PRIVATE cxx_std_17)
 
+# 兼容单配置（Ninja, VS CMake 模式）和多配置（Visual Studio generator）
+# === 统一设置输出目录 ===
+if(CMAKE_CONFIGURATION_TYPES)
+    # Multi-config (Visual Studio)
+    foreach(CONF Debug Release RelWithDebInfo MinSizeRel)
+        string(TOUPPER "${CONF}" CONF_UPPER)
+        set_target_properties(${LIB_NAME} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY_${CONF_UPPER} "${PROJECT_BINARY_DIR}/bin/${CONF}"
+            LIBRARY_OUTPUT_DIRECTORY_${CONF_UPPER} "${PROJECT_BINARY_DIR}/bin/${CONF}"
+            ARCHIVE_OUTPUT_DIRECTORY_${CONF_UPPER} "${PROJECT_BINARY_DIR}/lib/${CONF}"
+        )
+    endforeach()
+else()
+    # Single-config (Ninja, VS CMake mode)
+    set_target_properties(${LIB_NAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
+        LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
+        ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib"
+    )
+endif()
 
+install(TARGETS ${LIB_NAME}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # .dll on Windows
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # .so on Linux
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # .lib on Windows
+)
