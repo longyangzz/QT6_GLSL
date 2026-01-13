@@ -90,7 +90,7 @@ int BCGP::LoadFile(const QString& fileName, GLSLViewer* viewer)
     subWindow->setWindowTitle("GLSL Viewer");
     
     //最大化显示，初始化opengl环境后才能加载数据
-    pNewViewer->showMaximized();
+    subWindow->showMaximized();
 
     pNewViewer->loadPointCloud(fileName);
 	return 0;
