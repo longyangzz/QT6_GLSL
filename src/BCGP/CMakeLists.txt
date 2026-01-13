@@ -30,6 +30,7 @@ set(ALL_FILES
 add_executable(${LIB_NAME} ${ALL_FILES})
 
 # =============== 4. 链接 Qt 库 ===============
+message("APP_QT_TARGETS-${APP_QT_TARGETS}")
 target_link_libraries(${LIB_NAME} PRIVATE
     ${APP_QT_TARGETS}
     DCGui
@@ -74,3 +75,14 @@ add_custom_command(TARGET ${LIB_NAME} POST_BUILD
         "$<TARGET_FILE_DIR:${LIB_NAME}>/"
     COMMENT "Copying resource directory to output folder..."
 )
+
+# ====== 部署 Qt 运行时依赖（包括 DLL + 插件） ======
+#if(WIN32)
+#    find_program(WINDEPLOYQT windeployqt)
+#    if(WINDEPLOYQT)
+#        add_custom_command(TARGET ${LIB_NAME} POST_BUILD
+#            COMMAND ${WINDEPLOYQT} --release "$<TARGET_FILE_DIR:${LIB_NAME}>"
+#            COMMENT "Deploying Qt"
+#        )
+#    endif()
+#endif()

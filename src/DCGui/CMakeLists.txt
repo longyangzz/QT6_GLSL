@@ -69,3 +69,12 @@ install(TARGETS ${LIB_NAME}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # .so on Linux
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # .lib on Windows
 )
+
+qt56_generate_deploy_app_script(
+    TARGET ${LIB_NAME}
+    OUTPUT_SCRIPT deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+	DEPLOY_TOOL_OPTIONS ${_QT56_DEPLOY_TOOL_OPTIONS}
+)
+
+install(SCRIPT ${deploy_script})

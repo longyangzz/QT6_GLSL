@@ -39,6 +39,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Qt56CoreMacros.cmake)
 
 
 ADD_SUBDIRECTORY(src)
@@ -46,7 +47,7 @@ ADD_SUBDIRECTORY(test)
 
 # =============== 4. 自动部署 Qt 运行时依赖（关键！）===============
 # 需要 Qt6 的部署模块
-include(cmake/Qt56CoreMacros.cmake)
+
 
 qt56_generate_deploy_app_script(
     TARGET BCGP
