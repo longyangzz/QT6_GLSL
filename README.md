@@ -49,3 +49,5 @@
 
 4、如果作为产品发布，可以安装NSIS安装包制作工具，在cmake的构建目录下执行 cpack命令，即自动执行install使用NSIS工作制作exe安装包
 
+## 学习资源 
+https://ghorwin.github.io/OpenGLWithQt-Tutorial/
