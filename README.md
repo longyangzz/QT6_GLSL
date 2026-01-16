@@ -33,5 +33,19 @@
 
 
 
-![示例界面](.\demo.png)
+![示例界面](.\image\demo.png)
+
+## 使用步骤
+
+1、下载代码，使用CMake GUI构建编译
+
+![Cmake中配置Qt路径](.\image\cmake.png)
+
+2、使用VS打开构建后的sln工程
+
+3、release模式下直接支持install安装到指定目录，并自动拷贝qt依赖及资源文件
+
+![image-20260116115506758](.\image\image-vs2026.png)
+
+4、如果作为产品发布，可以安装NSIS安装包制作工具，在cmake的构建目录下执行 cpack命令，即自动执行install使用NSIS工作制作exe安装包
 
